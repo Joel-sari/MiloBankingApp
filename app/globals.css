@@ -110,10 +110,18 @@
     scrollbar-width: none;
   }
 
+  .home::-webkit-scrollbar {
+    display: none;
+  }
+
   .home-content {
     @apply flex w-full flex-1 flex-col gap-8 px-5 sm:px-8 py-7 lg:py-12 xl:max-h-screen xl:overflow-y-scroll;
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .home-content::-webkit-scrollbar {
+    display: none;
   }
 
   .home-header {
@@ -125,7 +133,7 @@
   }
 
   .total-balance-chart {
-    @apply flex size-full max-w-[100px] items-center sm:max-w-[120px];
+    @apply flex size-[100px] shrink-0 items-center sm:size-[120px];
   }
 
   .total-balance-label {
@@ -156,11 +164,34 @@
     @apply mb-8 flex w-full flex-nowrap;
   }
 
+  .recent-transactions-tablist::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  .recent-transactions-tablist::-webkit-scrollbar-track {
+    background: #dddddd;
+  }
+
+  .recent-transactions-tablist::-webkit-scrollbar-thumb {
+    background: #5c5c7b;
+    border-radius: 50px;
+  }
+
+  .recent-transactions-tablist::-webkit-scrollbar-thumb:hover {
+    background: #7878a3;
+  }
+
   /* Right sidebar */
   .right-sidebar {
     @apply hidden h-screen max-h-screen flex-col border-l border-gray-200 xl:flex w-[355px] xl:overflow-y-scroll;
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .right-sidebar::-webkit-scrollbar {
+    display: none;
   }
 
   .profile-banner {
@@ -261,6 +292,10 @@
     @apply flex gap-3 items-center p-4 rounded-lg w-full max-w-60;
   }
 
+  .mobilenav-label {
+    @apply text-[16px] font-semibold text-black-2;
+  }
+
   /* PlaidLink */
   .plaidlink-primary {
     @apply text-[16px] rounded-lg border border-bankGradient bg-bank-gradient font-semibold text-white shadow-form;
@@ -309,6 +344,10 @@
     @apply flex flex-col overflow-y-scroll bg-gray-25 p-8 md:max-h-screen xl:py-12;
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .payment-transfer::-webkit-scrollbar {
+    display: none;
   }
 
   .payment-transfer_form-item {
@@ -372,18 +411,18 @@
 
   /* Sidebar */
   .sidebar {
-    @apply sticky left-0 top-0 flex h-screen w-fit flex-col  justify-between border-r border-gray-200 bg-white pt-8 text-white max-md:hidden sm:p-4 xl:p-6 2xl:w-[355px];
+    @apply sticky left-0 top-0 flex h-screen w-fit flex-col justify-between border-r border-gray-200 bg-white pt-8 text-white max-md:hidden sm:p-4 md:w-[240px] xl:p-6 2xl:w-[355px];
   }
 
   .sidebar-logo {
-    @apply 2xl:text-[26px] font-ibm-plex-serif text-[26px] font-bold text-black-1 max-xl:hidden;
+    @apply 2xl:text-[26px] font-ibm-plex-serif text-[26px] font-bold text-black-1 max-md:hidden;
   }
 
   .sidebar-link {
-    @apply flex gap-3 items-center py-1 md:p-3 2xl:p-4 rounded-lg justify-center xl:justify-start;
+    @apply flex w-full gap-3 items-center py-1 md:p-3 2xl:p-4 rounded-lg justify-start;
   }
 
   .sidebar-label {
-    @apply text-[16px] font-semibold text-black-2 max-xl:hidden;
+    @apply text-[16px] font-semibold text-black-2 max-md:hidden;
   }
 }
