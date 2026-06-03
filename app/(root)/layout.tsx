@@ -12,7 +12,7 @@ export default function RootLayout({
   return (
     <main className="flex h-screen w-full font-inter">
       <Sidebar />
-      <div className="flex size-full flex-col">
+      <div className="flex size-full min-w-0 flex-col">
         <div className="root-layout">
           <Image src="/icons/Milo.png" alt="Logo" width={50} height={50} />
           <div>
