@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Create Next App",
-  description: "Build wealth one milestone at a time",
+  title: "Milo",
+  description: "Connect accounts, track progress, and build wealth one milestone at a time.",
   icons:{ icon: "/icons/logo.svg" },
 };
 

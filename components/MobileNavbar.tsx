@@ -25,7 +25,10 @@ const MobileNavbar = () => {
             className="cursor-pointer"
           />
         </SheetTrigger>
-        <SheetContent side="left" className="border-none bg-white ">
+        <SheetContent
+          side="left"
+          className="border-r border-milo-line bg-milo-midnight"
+        >
           <Link
             href="/"
             className="flex cursor-pointer items-center gap-1 px-4"
