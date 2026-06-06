@@ -342,6 +342,10 @@
     @apply flex min-h-screen w-full max-w-[420px] flex-col justify-center gap-5 py-10 md:gap-8;
   }
 
+  .auth-form-sign-up {
+    @apply max-w-[640px];
+  }
+
   .form-item {
     @apply flex flex-col gap-1.5;
   }

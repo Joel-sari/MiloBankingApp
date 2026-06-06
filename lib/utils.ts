@@ -1,9 +1,45 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import * as z from "zod";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export const authFormSchema = (type: "sign-in" | "sign-up") => {
+  const requiredString = (fieldName: string) =>
+    z.string().min(2, `${fieldName} must be at least 2 characters.`);
+
+  return z.object({
+    firstName:
+      type === "sign-in" ? z.string().optional() : requiredString("First name"),
+    lastName:
+      type === "sign-in" ? z.string().optional() : requiredString("Last name"),
+    address1:
+      type === "sign-in" ? z.string().optional() : requiredString("Address"),
+    city: type === "sign-in" ? z.string().optional() : requiredString("City"),
+    state:
+      type === "sign-in"
+        ? z.string().optional()
+        : z.string().min(2, "State must be at least 2 characters."),
+    postalCode:
+      type === "sign-in"
+        ? z.string().optional()
+        : z.string().min(5, "Postal code must be at least 5 characters."),
+    dateOfBirth:
+      type === "sign-in"
+        ? z.string().optional()
+        : z.string().min(8, "Date of birth is required."),
+    ssn:
+      type === "sign-in"
+        ? z.string().optional()
+        : z.string().min(4, "SSN must be at least 4 characters."),
+    email: z.string().email("Enter a valid email address."),
+    password: z.string().min(8, "Password must be at least 8 characters."),
+  });
+};
+
+export type AuthFormValues = z.infer<ReturnType<typeof authFormSchema>>;
 
 // FORMAT DATE TIME
 export const formatDateTime = (dateString: Date) => {

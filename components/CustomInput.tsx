@@ -38,9 +38,12 @@ const CustomInput = <TFormValues extends FieldValues>({
     | undefined;
 
   return (
-    <Field data-invalid={!!error} className={fieldClassName}>
-      <div className="form-item">
-        <FieldLabel htmlFor={inputId} className={cn("form-label", labelClassName)}>
+    <Field data-invalid={!!error} className={cn("w-full", fieldClassName)}>
+      <div className="form-item w-full">
+        <FieldLabel
+          htmlFor={inputId}
+          className={cn("form-label", labelClassName)}
+        >
           {label}
         </FieldLabel>
         <div className="mb-1 flex w-full flex-col">
@@ -48,7 +51,8 @@ const CustomInput = <TFormValues extends FieldValues>({
             id={inputId}
             type={type}
             placeholder={placeholder}
-            className={cn("input-class", inputClassName, className)}
+            aria-invalid={!!error}
+            className={cn("input-class min-h-11 px-3", inputClassName, className)}
             {...form.register(name)}
             {...props}
           />
