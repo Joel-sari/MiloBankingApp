@@ -3,7 +3,7 @@ import Link from "next/link"
 import BanksCard from "./BanksCard"
 
 const RightSidebar = ({ user, banks }: RightSidebarProps) => {
-  const userName = `${user.firstName} ${user.lastName}`;
+  
   const cardOffset = 72;
   const cardHeight = 192;
 
@@ -14,12 +14,12 @@ const RightSidebar = ({ user, banks }: RightSidebarProps) => {
         <div className="profile">
           <div className="profile-img">
             <span className="text-5xl font-bold text-blue-500">
-              {user.firstName[0]}
+              {user.name[0]}
             </span>
           </div>
           <div className="profile-details">
             <h1 className="profile-name">
-              {user.firstName} {user.lastName}
+              {user.name}
             </h1>
             <p className="profile-email"> {user.email} </p>
           </div>
@@ -56,7 +56,7 @@ const RightSidebar = ({ user, banks }: RightSidebarProps) => {
                   transformOrigin: "top center",
                 }}
               >
-                <BanksCard account={account} userName={userName} />
+                <BanksCard account={account} userName={user.name} />
               </div>
             ))}
           </div>

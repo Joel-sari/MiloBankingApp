@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { use, useState } from "react";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
@@ -11,14 +11,16 @@ import CustomInput from "@/components/CustomInput";
 import { FieldGroup } from "@/components/ui/field";
 import { authFormSchema, cn, type AuthFormValues } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
-import SignIn from "@/app/(auth)/sign-in/page";
+// removed unused SignIn import
 import { useRouter } from "next/navigation";
 import { signIn, signUp } from "@/lib/actions/user.actions";
 
 const AuthForm = ({ type }: AuthFormProps) => {
   const [user, setUser] = useState<AuthFormValues | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const formSchema = authFormSchema(type);
+
 
   const router = useRouter();
 
@@ -38,33 +40,76 @@ const AuthForm = ({ type }: AuthFormProps) => {
     },
   });
 
+  /**
+   * Form submission handler for both sign-in and sign-up
+   * 
+   * For SIGN-UP:
+   * 1. Calls signUp server action with form data
+   * 2. Server creates account and session cookie
+   * 3. Sets user state to trigger account linking flow
+   * 4. User can then link their bank account (Plaid integration)
+   * 
+   * For SIGN-IN:
+   * 1. Calls signIn server action with email and password only
+   * 2. Server authenticates user and sets session cookie
+   * 3. If successful (returns session data), redirect to home page
+   * 4. If failed (returns null), show error message
+   */
   const onSubmit = async(data: AuthFormValues) => {
     
+    // Clear previous auth errors and show loading spinner
+    setAuthError(null);
     setIsLoading(true);
-    setUser(data);
     
     try{
-      // We will handle authentication logic here, such as sending data to the server and receiving a response. This is done through Appwrite 
       if(type === "sign-up"){
-        // Sign up logic
+        // SIGN-UP FLOW: Create new account
         console.log("Signing up with data:", data);
+        
+        // Call server action to create account and session
         const newUser = await signUp(data);
+        
+        if (!newUser) {
+          setAuthError("Unable to create account. Please check your information and try again.");
+          return;
+        }
 
-        setUser(newUser);
+        // Store user data in state to show account linking form
+        // The UI will show "Link Account" screen where user connects bank account
+        setUser(data);
       }
+      
       if (type === "sign-in"){
-        // Sign in logic
+        // SIGN-IN FLOW: Authenticate existing user
+        // Send only email and password (other fields are N/A for sign-in)
         const response = await signIn(
           {
             email: data.email,
             password: data.password,
           }
         )
-        if (response)router.push("/");
+        
+        // Check if sign-in was successful
+        if (response){
+          // Success! Session cookie was set by server
+          // Redirect to home page
+          router.push("/");
+        } else {
+          // Sign-in failed - response is null
+          // This means password was wrong, user doesn't exist, or server error
+          setAuthError("Invalid email or password. Please try again.");
+        }
       }
 
     }
     catch(error){
+      // Catch any errors during form submission
+      // Could be network errors, validation errors, server errors
+      const message =
+        error instanceof Error
+          ? error.message
+          : "An unexpected error occurred. Please try again.";
+      setAuthError(message);
       console.error("Error during authentication:", error);
     }
     finally{
@@ -183,6 +228,11 @@ const AuthForm = ({ type }: AuthFormProps) => {
                 placeholder="Enter your password"
               />
             </FieldGroup>
+            {authError && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {authError}
+              </div>
+            )}
             <div className="flex flex-col gap-4">
               <Button type="submit" className="form-btn">
                 {isLoading ? (
