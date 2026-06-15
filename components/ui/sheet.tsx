@@ -4,7 +4,6 @@ import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
@@ -63,17 +62,15 @@ function SheetContent({
           <SheetPrimitive.Close
             data-slot="sheet-close"
             render={
-              <Button
-                variant="ghost"
-                className="absolute top-3 right-3"
-                size="icon-sm"
-              />
+              <button
+                type="button"
+                className="absolute top-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-transparent text-current transition hover:bg-muted/80 focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </button>
             }
-          >
-            <XIcon
-            />
-            <span className="sr-only">Close</span>
-          </SheetPrimitive.Close>
+          />
         )}
       </SheetPrimitive.Popup>
     </SheetPortal>

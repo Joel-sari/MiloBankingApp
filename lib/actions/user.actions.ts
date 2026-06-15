@@ -5,11 +5,7 @@ import { createAdminClient, createSessionClient } from "../appwrite";
 import { parseStringify } from "../utils";
 import { cookies } from "next/headers";
 
-/**
- * Interface for Appwrite session response
- * Sessions can return either a 'secret' or '$id' depending on the SDK version
- */
-interface AppwriteSession {
+interface SessionResponse {
   secret?: string;
   $id?: string;
 }
@@ -55,7 +51,8 @@ export const signIn = async (credentials: signInProps) => {
     }
 
     // Extract the session token - different Appwrite versions use different field names
-    const token = (session as any).secret || (session as any).$id || "";
+    const sessionData = session as SessionResponse;
+    const token = sessionData.secret || sessionData.$id || "";
 
     // Store session token in a secure HTTP-only cookie
     // This allows the server to verify the user's identity on future requests
@@ -69,8 +66,9 @@ export const signIn = async (credentials: signInProps) => {
 
     // Return session data to client (confirms successful sign-in)
     return parseStringify(session);
-  } catch (error) {
-    console.error("Error during sign in:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error during sign in:", message);
     // Return null on failure - client checks for null and shows error message
     return null;
   }
@@ -125,7 +123,8 @@ export const signUp = async (userData: SignUpParams) => {
     }
 
     // Extract session token (same process as in signIn)
-    const token = (session as any).secret || (session as any).$id || "";
+    const sessionData = session as SessionResponse;
+    const token = sessionData.secret || sessionData.$id || "";
 
     // Store the session in a secure cookie (same security settings as signIn)
     const cookieStore = await cookies();
@@ -138,8 +137,9 @@ export const signUp = async (userData: SignUpParams) => {
 
     // Return new account data to client (confirms account was created)
     return parseStringify(newUserAccount);
-  } catch (error) {
-    console.error("Error during sign up:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error during sign up:", message);
     // Return null on failure - client shows error message
     return null;
   }
@@ -162,7 +162,7 @@ export const signUp = async (userData: SignUpParams) => {
  * 
  * @returns User object if authenticated, null if not logged in
  */
-export async function getLoggedInUser(){
+export async function getLoggedInUser(): Promise<User | null> {
   try{
     // Create session client using the cookie from sign-in
     // This validates the user is authenticated and has a valid session
@@ -171,11 +171,13 @@ export async function getLoggedInUser(){
     // Fetch the current user's profile data from Appwrite
     const user = await account.get();
 
-    // Return user data (ID, email, name, metadata, etc.)
-    return parseStringify(user);
-  } catch(error){
+    // Cast through unknown to satisfy TypeScript without losing the server-side shape
+    return parseStringify(user) as unknown as User;
+  } catch (error: unknown) {
     // Return null if user is not authenticated or session is invalid
     // This happens when: no cookie exists, cookie is expired, or cookie is invalid
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching logged in user:", message);
     return null;
   }
 }
@@ -189,12 +191,9 @@ export const logoutAccount = async () => {
     (await cookies()).delete('my-custom-session');
 
     return true;
-  }
-  catch (error){
-    console.log("Error during logout")
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log("Error during logout:", message);
     return null;
-
   }
-    
-
-}
+};
