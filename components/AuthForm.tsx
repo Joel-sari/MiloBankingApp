@@ -14,9 +14,10 @@ import { Loader2 } from "lucide-react";
 // removed unused SignIn import
 import { useRouter } from "next/navigation";
 import { signIn, signUp } from "@/lib/actions/user.actions";
+import PlaidLink from "./PlaidLink";
 
 const AuthForm = ({ type }: AuthFormProps) => {
-  const [user, setUser] = useState<AuthFormValues | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const formSchema = authFormSchema(type);
@@ -62,12 +63,29 @@ const AuthForm = ({ type }: AuthFormProps) => {
     setIsLoading(true);
     
     try{
+
+      const userData = {
+        firstName: data.firstName!,
+        lastName: data.lastName!,
+        address1: data.address1!,
+        city:data.city!,
+        state: data.state!,
+        postalCode: data.postalCode!,
+        dateOfBirth: data.dateOfBirth!,
+        ssn: data.ssn!,
+        email: data.email,
+        password: data.password
+
+      }
+
+
+
       if(type === "sign-up"){
         // SIGN-UP FLOW: Create new account
         console.log("Signing up with data:", data);
         
         // Call server action to create account and session
-        const newUser = await signUp(data);
+        const newUser = await signUp(userData);
         
         if (!newUser) {
           setAuthError("Unable to create account. Please check your information and try again.");
@@ -76,7 +94,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
 
         // Store user data in state to show account linking form
         // The UI will show "Link Account" screen where user connects bank account
-        setUser(data);
+        setUser(newUser as User);
       }
       
       if (type === "sign-in"){
@@ -142,7 +160,11 @@ const AuthForm = ({ type }: AuthFormProps) => {
       </header>
 
       {user ? (
-        <div className="flex flex-col gap-4">{/* Plaid ID */}</div>
+        <div className="flex flex-col gap-4">
+
+          <PlaidLink user={user} variant="primary"/>
+
+        </div>
       ) : (
         <>
           <form

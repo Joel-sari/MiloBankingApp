@@ -7,6 +7,8 @@ import React from 'react'
 const Home = async () => {
   const loggedIn =  await getLoggedInUser();
 
+  if (!loggedIn) return null;
+
   const banks: Account[] = [
     {
       id: 'checking-001',

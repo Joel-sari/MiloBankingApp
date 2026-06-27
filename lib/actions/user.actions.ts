@@ -1,14 +1,38 @@
 "use server";
 
-import { ID } from "node-appwrite";
+import { ID, Query } from "node-appwrite";
 import { createAdminClient, createSessionClient } from "../appwrite";
-import { parseStringify } from "../utils";
+import { encryptId, extractCustomerIdFromUrl, parseStringify } from "../utils";
 import { cookies } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
+import {
+  CountryCode,
+  ProcessorTokenCreateRequest,
+  ProcessorTokenCreateRequestProcessorEnum,
+  Products,
+} from "plaid";
+import { plaidClient } from "@/lib/plaid";
+import { revalidatePath } from "next/cache";
+import { addFundingSource, createDwollaCustomer } from "./dwolla.actions";
+
+const {
+  APPWRITE_DATABASE_ID: DATABASE_ID,
+  APPWRITE_USER_TABLE_ID: USER_TABLE_ID,
+  APPWRITE_BANKS_TABLE_ID: BANK_TABLE_ID
+} = process.env;
 
 interface SessionResponse {
   secret?: string;
   $id?: string;
 }
+
+const normalizeUser = <T extends Record<string, unknown> & {
+  firstName?: string;
+  lastName?: string;
+}>(user: T) => ({
+  ...user,
+  name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+});
 
 /**
  * SIGN IN - Server action that authenticates an existing user
@@ -67,6 +91,7 @@ export const signIn = async (credentials: signInProps) => {
     // Return session data to client (confirms successful sign-in)
     return parseStringify(session);
   } catch (error: unknown) {
+    unstable_rethrow(error);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error during sign in:", message);
     // Return null on failure - client checks for null and shows error message
@@ -89,24 +114,68 @@ export const signIn = async (credentials: signInProps) => {
  * @param userData - User registration data including email, password, name, address
  * @returns New user account object if successful, null if failed
  */
-export const signUp = async (userData: SignUpParams) => {
+export const signUp = async ({password, ...userData}: SignUpParams) => {
 
   // Extract the essential fields from the signup form
-  const { email, password, firstName, lastName } = userData
+  const {
+    email,
+    firstName,
+    lastName,
+    address1,
+    city,
+    state,
+    postalCode,
+    dateOfBirth,
+    ssn,
+  } = userData
+
+  let newUserAccount;
   try {
 
     // Create admin client to create new account
-    const { account } = await createAdminClient();
+    const { account, database } = await createAdminClient();
 
     // Create new user account in Appwrite
     // ID.unique() generates a unique 36-char ID for this user
     // The name field combines first and last name
-    const newUserAccount = await account.create(
+    newUserAccount = await account.create(
       ID.unique(),                                              // userId: unique identifier
       email,                                                    // email: login email
       password,                                                 // password: hashed by Appwrite
       `${firstName ?? ""} ${lastName ?? ""}`.trim()            // name: display name
     );
+    if(!newUserAccount) throw new Error('Error creating user')
+
+    const dwollaCustomerURL = await createDwollaCustomer({
+      ...userData,
+      type:"personal",
+    })
+
+    if (!dwollaCustomerURL) throw new Error('Error creating Dwolla Customer');
+
+    const dwollaCustomerID = extractCustomerIdFromUrl(dwollaCustomerURL);
+
+    const newUser = await database.createDocument(
+      DATABASE_ID!,
+      USER_TABLE_ID!,
+      ID.unique(),
+      {
+        firstName,
+        lastName,
+        address1,
+        city,
+        state,
+        postalCode,
+        dateOfBirth,
+        ssn,
+        email,
+        userId: newUserAccount.$id,
+        dwollaCustomerID,
+        dwollaCustomerURL
+
+      }
+    )
+
 
     // After account creation, automatically log the user in
     // This creates a session so the user doesn't have to sign in again
@@ -136,8 +205,9 @@ export const signUp = async (userData: SignUpParams) => {
     });
 
     // Return new account data to client (confirms account was created)
-    return parseStringify(newUserAccount);
+    return parseStringify(normalizeUser(newUser)) as unknown as User;
   } catch (error: unknown) {
+    unstable_rethrow(error);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error during sign up:", message);
     // Return null on failure - client shows error message
@@ -168,12 +238,24 @@ export async function getLoggedInUser(): Promise<User | null> {
     // This validates the user is authenticated and has a valid session
     const { account } = await createSessionClient();
     
-    // Fetch the current user's profile data from Appwrite
-    const user = await account.get();
+    // Fetch the authenticated Appwrite account first.
+    const accountUser = await account.get();
+
+    const { database } = await createAdminClient();
+    const users = await database.listDocuments(
+      DATABASE_ID!,
+      USER_TABLE_ID!,
+      [Query.equal("userId", accountUser.$id)]
+    );
+
+    const user = users.documents[0];
+
+    if (!user) return null;
 
     // Cast through unknown to satisfy TypeScript without losing the server-side shape
-    return parseStringify(user) as unknown as User;
+    return parseStringify(normalizeUser(user)) as unknown as User;
   } catch (error: unknown) {
+    unstable_rethrow(error);
     // Return null if user is not authenticated or session is invalid
     // This happens when: no cookie exists, cookie is expired, or cookie is invalid
     const message = error instanceof Error ? error.message : String(error);
@@ -192,8 +274,141 @@ export const logoutAccount = async () => {
 
     return true;
   } catch (error: unknown) {
+    unstable_rethrow(error);
     const message = error instanceof Error ? error.message : String(error);
     console.log("Error during logout:", message);
     return null;
   }
 };
+
+export const createLinkToken = async( user: User) => {
+  try{
+    const tokenParams = {
+      user: {
+        // specific Plaid ID structure 
+        client_user_id: user.$id
+      },
+      client_name: user.name,
+      products: ['auth'] as Products[],
+      language: 'en',
+      country_codes:['US'] as CountryCode[],
+
+    }
+
+    const response = await plaidClient.linkTokenCreate(tokenParams);
+
+    return parseStringify({linkToken: response.data.link_token})
+
+  }
+  catch(error){
+    console.log(error);
+    
+}
+}
+
+// Strictly creating a bank acocunt within Appwrite (our database)
+export const createBankAccount = async ({
+  userId,
+  bankId,
+  accountId,
+  accessToken,
+  fundingSourceUrl,
+  sharableId,
+
+
+}: createBankAccountProps)=> {
+  try{
+    //createAdminClient allows us to create/add to the database
+    const { database } = await createAdminClient();
+    const bankAccount = await database.createDocument(
+      DATABASE_ID!,
+      BANK_TABLE_ID!,
+      ID.unique(),
+      {
+        userId, 
+        bankId,
+        accountId,
+        accessToken,
+        fundingSourceUrl,
+        sharableId,
+      },
+    );
+
+    return parseStringify(bankAccount);
+
+  }
+  catch(error){
+
+  }
+}
+
+export const exchangePublicToken = async ({
+  publicToken,
+  user, 
+}: exchangePublicTokenProps)=> {
+
+  try {
+    // We need to exchnage the public token for access token and an item ID given by PLAID 
+    const response = await plaidClient.itemPublicTokenExchange({
+      public_token: publicToken,
+
+    })
+
+    // now we destrcuture the informaation received from our response
+    const accessToken = response.data.access_token;
+    const itemId = response.data.item_id;
+
+    // Get account information from Plaid using the account token 
+    const accountsResponse = await plaidClient.accountsGet
+    ({
+      access_token: accessToken,
+    });
+    const accountData = accountsResponse.data.accounts[0];
+
+    // Creating a processor token for Dwolla using the access token and account ID 
+    const request: ProcessorTokenCreateRequest = {
+      access_token: accessToken,
+      account_id: accountData.account_id,
+      processor: "dwolla" as ProcessorTokenCreateRequestProcessorEnum,
+    };
+
+    const processorTokenResponse = await plaidClient.processorTokenCreate(request);
+    const processorToken = processorTokenResponse.data.processor_token;
+    
+    // Now we need to create a funding source URL for the accout usimg the Dwolla customer ID, processor token, and bank name 
+    const fundingSourceUrl = await addFundingSource({
+      dwollaCustomerId: user.dwollaCustomerID,
+      processorToken,
+      bankName: accountData.name
+
+    });
+
+    // We need to also throw an error if the funding source URL does not exist or isn't created
+    if (!fundingSourceUrl) throw new Error("Error creating funding source");
+
+
+    // Lastly, we need to create a Bank Account for our app, using User ID, item ID, account ID, access token, funding source URL, and sharable ID 
+    await createBankAccount({
+      userId: user.$id,
+      bankId: itemId,
+      accountId: accountData.account_id,
+      accessToken,
+      fundingSourceUrl,
+      sharableId: encryptId(accountData.account_id)
+
+    });
+
+    //Lastly we need to revalidate the path to reflect the changes
+    revalidatePath("/");
+
+    //Return a success message!
+    return parseStringify({
+      publicTokenExchange: "complete",
+    })
+
+
+  }
+  catch(error){
+    console.log(error)
+  }
+}
