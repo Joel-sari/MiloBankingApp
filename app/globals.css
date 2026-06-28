@@ -184,7 +184,7 @@
   }
 
   .recent-transactions-tablist {
-    @apply mb-8 flex w-full flex-nowrap;
+    @apply grid h-auto w-full grid-cols-1 gap-3 bg-transparent p-0 sm:grid-cols-2;
   }
 
   .recent-transactions-tablist::-webkit-scrollbar {
@@ -294,16 +294,16 @@
 
   /* Bank Info */
   .bank-info {
-    @apply flex gap-4.5 rounded-xl border border-milo-line bg-milo-panel p-4 transition-all hover:border-milo-cyan/60;
+    @apply flex w-full gap-4.5 rounded-xl border border-milo-line bg-milo-panel p-4 transition-all hover:border-milo-cyan/60;
   }
 
   /* Category Badge */
   .category-badge {
-    @apply flex w-fit items-center justify-center gap-1 truncate rounded-2xl border-2 py-0.5 pl-1.5 pr-2;
+    @apply flex max-w-[220px] items-center justify-start gap-2 truncate rounded-2xl border px-3 py-1;
   }
 
   .banktab-item {
-    @apply flex gap-4.5 border-b-2 px-2 py-2 transition-all sm:px-4;
+    @apply flex min-h-14 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-all;
   }
 
   /* Mobile nav */

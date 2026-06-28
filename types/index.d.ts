@@ -27,8 +27,8 @@ declare type User = {
   $id: string;
   email: string;
   userId: string;
-  dwollaCustomerURL: string;
-  dwollaCustomerID: string;
+  dwollaCustomerUrl: string;
+  dwollaCustomerId: string;
   firstName: string;
   lastName: string;
   name: string;
@@ -58,26 +58,25 @@ declare type Account = {
   type: string;
   subtype: string;
   appwriteItemId: string;
-  sharableId: string;
+  shareableId: string;
 };
 
 declare type Transaction = {
   id: string;
-  $id: string;
+  $id?: string;
   name: string;
   paymentChannel: string;
   type: string;
-  accountId: string;
+  accountId?: string;
   amount: number;
-  pending: boolean;
+  pending?: boolean;
   category: string;
   date: string;
-  image: string;
-  type: string;
-  $createdAt: string;
-  channel: string;
-  senderBankId: string;
-  receiverBankId: string;
+  image?: string | null;
+  $createdAt?: string;
+  channel?: string;
+  senderBankId?: string;
+  receiverBankId?: string;
 };
 
 declare type Bank = {
@@ -87,7 +86,7 @@ declare type Bank = {
   accessToken: string;
   fundingSourceUrl: string;
   userId: string;
-  sharableId: string;
+  shareableId: string;
 };
 
 declare type AccountTypes =
@@ -174,7 +173,7 @@ declare interface PaginationProps {
 declare interface PlaidLinkProps {
   user: User;
   variant?: "primary" | "ghost";
-  dwollaCustomerID?: string;
+  dwollaCustomerId?: string;
 }
 
 // declare type User = sdk.Models.Document & {
@@ -312,7 +311,7 @@ declare interface createBankAccountProps {
   accountId: string;
   bankId: string;
   fundingSourceUrl: string;
-  sharableId: string;
+  shareableId: string;
 }
 
 declare interface getBanksProps {

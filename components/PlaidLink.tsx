@@ -26,16 +26,18 @@ const PlaidLink = ( { user, variant } : PlaidLinkProps ) => {
   }, [router, user])
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>( async (public_token: string) => {
-    await exchangePublicToken({
+    const response = await exchangePublicToken({
       publicToken: public_token,
       user,
     }
     )
+    console.log("[PlaidLink] exchangePublicToken response", response);
 
     // after the exhange of token we can go to the home page 
     router.push('/');
+    router.refresh();
 
-  }, [user])
+  }, [router, user])
 
   const configuration: PlaidLinkOptions ={
     token, 

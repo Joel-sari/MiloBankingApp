@@ -6,35 +6,46 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 
 const DoughnutChart = ({ accounts } : DoughnutChartProps) => {
-  const accountBalances = accounts.length
-    ? accounts.map((account) => account.currentBalance)
-    : [1250, 2500];
 
-  const accountLabels = accounts.length
+  const hasAccounts = accounts.length > 0;
+  const accountNames = hasAccounts
     ? accounts.map((account) => account.name)
-    : ['Bank 1', 'Bank 2'];
+    : ["No accounts"];
+  const balances = hasAccounts
+    ? accounts.map((account) => account.currentBalance)
+    : [1];
+  
 
   const data = {
     datasets: [
       {
         label: 'Banks',
-        data: accountBalances,
-        backgroundColor: [
-          '#077bff',
-          '#2265d8',
-          '#2f91fa'
-        ],
+        data: balances,
+        backgroundColor: hasAccounts
+          ? [
+              '#077bff',
+              '#2265d8',
+              '#2f91fa'
+            ]
+          : ['#475569'],
         borderWidth: 0,
+        hoverBackgroundColor: hasAccounts
+          ? [
+              '#077bff',
+              '#2265d8',
+              '#2f91fa'
+            ]
+          : ['#475569'],
       }
     ],
-    labels: accountLabels
+    labels: accountNames
   };
 
   const options: ChartOptions<"doughnut"> = {
     cutout: "60%",
     plugins: {
       legend: {
-        display: true,
+        display: hasAccounts,
         position: "top",
         align: "start",
         labels: {
@@ -48,7 +59,7 @@ const DoughnutChart = ({ accounts } : DoughnutChartProps) => {
       },
 
       tooltip: {
-        enabled: true,
+        enabled: hasAccounts,
       },
     },
     maintainAspectRatio: false,

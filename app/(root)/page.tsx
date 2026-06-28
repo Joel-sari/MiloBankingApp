@@ -1,13 +1,51 @@
 import HeaderBox from '@/components/HeaderBox'
 import RightSidebar from '@/components/RightSidebar';
 import TotalBalanceBox from '@/components/TotalBalanceBox';
+import { getAccount, getAccounts } from '@/lib/actions/bank.actions';
 import { getLoggedInUser } from '@/lib/actions/user.actions';
+import RecentTransations from "@/components/RecentTransactions";
 import React from 'react'
 
-const Home = async () => {
-  const loggedIn =  await getLoggedInUser();
+type AccountsResponse = {
+  data: Account[];
+  totalBanks: number;
+  totalCurrentBalance: number;
+};
 
+const Home = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string | string[]; page?: string | string[] }>;
+}) => {
+  const { id, page } = await searchParams;
+  const selectedPage = Array.isArray(page) ? page[0] : page;
+  const currentPage = Number(selectedPage) || 1;
+  const loggedIn =  await getLoggedInUser();
   if (!loggedIn) return null;
+
+  const accounts = await getAccounts(
+    { 
+      userId: loggedIn.$id
+    }
+  ) as AccountsResponse | undefined;
+  if(!accounts) return null;
+
+  const accountsData = accounts.data;
+  const selectedAccountId = Array.isArray(id) ? id[0] : id;
+  const appwriteItemId = selectedAccountId || accountsData[0]?.appwriteItemId;
+
+  const account = appwriteItemId
+    ? await getAccount({ appwriteItemId })
+    : null;
+
+  console.log("[Home] returned data", {
+    userId: loggedIn.$id,
+    selectedAccountId,
+    appwriteItemId,
+    accounts,
+    account,
+  });
+
 
   const banks: Account[] = [
     {
@@ -21,7 +59,7 @@ const Home = async () => {
       type: 'depository',
       subtype: 'checking',
       appwriteItemId: 'item-001',
-      sharableId: 'checking-share-001',
+      shareableId: 'checking-share-001',
     },
     {
       id: 'savings-001',
@@ -34,7 +72,7 @@ const Home = async () => {
       type: 'depository',
       subtype: 'savings',
       appwriteItemId: 'item-002',
-      sharableId: 'savings-share-001',
+      shareableId: 'savings-share-001',
     },
     {
       id: 'credit-001',
@@ -47,7 +85,7 @@ const Home = async () => {
       type: 'credit',
       subtype: 'credit card',
       appwriteItemId: 'item-003',
-      sharableId: 'credit-share-001',
+      shareableId: 'credit-share-001',
     },
   ];
 
@@ -62,14 +100,15 @@ const Home = async () => {
             subtext="Access your dashboard to view your account details and manage your finances."
           />
           <TotalBalanceBox
-            accounts={[]}
-            totalBanks={1}
-            totalCurrentBalance={1250.34}
+            accounts={accountsData}
+            totalBanks={accounts?.totalBanks}
+            totalCurrentBalance={accounts?.totalCurrentBalance}
           />
         </header>
+        <RecentTransations accounts={accountsData} transactions={account?.transactions ?? []} appwriteItemId={appwriteItemId ?? ""} page={currentPage}/>
 
       </div>
-      <RightSidebar user={loggedIn} transactions={[]} banks={banks}/>
+      <RightSidebar user={loggedIn} transactions={account?.transactions ?? []} banks={accountsData}/>
       
     </section>
   )

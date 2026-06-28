@@ -52,6 +52,22 @@ const normalizeUser = <T extends Record<string, unknown> & {
  * @param credentials - Object containing email and password
  * @returns Session object if successful, null if failed
  */
+
+export const getUserInfo = async ( { userId }: getUserInfoProps )=>{
+  try {
+    const { database } = await createAdminClient();
+    const user = await database.listDocuments(
+      DATABASE_ID!,
+      USER_TABLE_ID!,
+      [Query.equal('userId', [userId])]
+
+    )
+    return parseStringify(user.documents[0]);
+  }
+  catch(error){
+    
+  }
+}
 export const signIn = async (credentials: signInProps) => {
   try {
     const { email, password } = credentials;
@@ -146,14 +162,14 @@ export const signUp = async ({password, ...userData}: SignUpParams) => {
     );
     if(!newUserAccount) throw new Error('Error creating user')
 
-    const dwollaCustomerURL = await createDwollaCustomer({
+    const dwollaCustomerUrl = await createDwollaCustomer({
       ...userData,
       type:"personal",
     })
 
-    if (!dwollaCustomerURL) throw new Error('Error creating Dwolla Customer');
+    if (!dwollaCustomerUrl) throw new Error('Error creating Dwolla Customer');
 
-    const dwollaCustomerID = extractCustomerIdFromUrl(dwollaCustomerURL);
+    const dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
 
     const newUser = await database.createDocument(
       DATABASE_ID!,
@@ -170,8 +186,8 @@ export const signUp = async ({password, ...userData}: SignUpParams) => {
         ssn,
         email,
         userId: newUserAccount.$id,
-        dwollaCustomerID,
-        dwollaCustomerURL
+        dwollaCustomerId,
+        dwollaCustomerUrl
 
       }
     )
@@ -240,6 +256,7 @@ export async function getLoggedInUser(): Promise<User | null> {
     
     // Fetch the authenticated Appwrite account first.
     const accountUser = await account.get();
+    
 
     const { database } = await createAdminClient();
     const users = await database.listDocuments(
@@ -289,7 +306,10 @@ export const createLinkToken = async( user: User) => {
         client_user_id: user.$id
       },
       client_name: user.name,
-      products: ['auth'] as Products[],
+      products: [Products.Auth, Products.Transactions],
+      transactions: {
+        days_requested: 180,
+      },
       language: 'en',
       country_codes:['US'] as CountryCode[],
 
@@ -313,7 +333,7 @@ export const createBankAccount = async ({
   accountId,
   accessToken,
   fundingSourceUrl,
-  sharableId,
+  shareableId,
 
 
 }: createBankAccountProps)=> {
@@ -330,7 +350,7 @@ export const createBankAccount = async ({
         accountId,
         accessToken,
         fundingSourceUrl,
-        sharableId,
+        shareableId,
       },
     );
 
@@ -338,7 +358,15 @@ export const createBankAccount = async ({
 
   }
   catch(error){
-
+    console.error("Error creating bank account:", {
+      userId,
+      bankId,
+      accountId,
+      fundingSourceUrl,
+      shareableId,
+      error,
+    });
+    throw error;
   }
 }
 
@@ -363,39 +391,94 @@ export const exchangePublicToken = async ({
     ({
       access_token: accessToken,
     });
-    const accountData = accountsResponse.data.accounts[0];
-
-    // Creating a processor token for Dwolla using the access token and account ID 
-    const request: ProcessorTokenCreateRequest = {
-      access_token: accessToken,
-      account_id: accountData.account_id,
-      processor: "dwolla" as ProcessorTokenCreateRequestProcessorEnum,
-    };
-
-    const processorTokenResponse = await plaidClient.processorTokenCreate(request);
-    const processorToken = processorTokenResponse.data.processor_token;
-    
-    // Now we need to create a funding source URL for the accout usimg the Dwolla customer ID, processor token, and bank name 
-    const fundingSourceUrl = await addFundingSource({
-      dwollaCustomerId: user.dwollaCustomerID,
-      processorToken,
-      bankName: accountData.name
-
+    const selectedAccounts = accountsResponse.data.accounts;
+    console.log("[exchangePublicToken] Plaid accounts returned", {
+      itemId,
+      userId: user.$id,
+      count: selectedAccounts.length,
+      accounts: selectedAccounts.map((account) => ({
+        accountId: account.account_id,
+        name: account.name,
+        mask: account.mask,
+        type: account.type,
+        subtype: account.subtype,
+      })),
     });
 
-    // We need to also throw an error if the funding source URL does not exist or isn't created
-    if (!fundingSourceUrl) throw new Error("Error creating funding source");
+    if (!selectedAccounts.length) {
+      throw new Error("No Plaid accounts were returned for this item");
+    }
 
+    const dwollaSupportedAccounts = selectedAccounts.filter((account) =>
+      ["checking", "savings", "money market"].includes(account.subtype ?? ""),
+    );
 
-    // Lastly, we need to create a Bank Account for our app, using User ID, item ID, account ID, access token, funding source URL, and sharable ID 
-    await createBankAccount({
-      userId: user.$id,
-      bankId: itemId,
-      accountId: accountData.account_id,
-      accessToken,
-      fundingSourceUrl,
-      sharableId: encryptId(accountData.account_id)
+    if (!dwollaSupportedAccounts.length) {
+      throw new Error(
+        "No selected Plaid accounts can be used with Dwolla. Select a checking, savings, or money market account.",
+      );
+    }
 
+    const skippedAccounts = selectedAccounts.filter(
+      (account) => !dwollaSupportedAccounts.includes(account),
+    );
+
+    if (skippedAccounts.length) {
+      console.warn("[exchangePublicToken] skipping unsupported Dwolla accounts", {
+        accounts: skippedAccounts.map((account) => ({
+          accountId: account.account_id,
+          name: account.name,
+          subtype: account.subtype,
+        })),
+      });
+    }
+
+    const bankAccounts = await Promise.all(
+      dwollaSupportedAccounts.map(async (accountData) => {
+        // Creating a processor token for Dwolla using the access token and account ID
+        const request: ProcessorTokenCreateRequest = {
+          access_token: accessToken,
+          account_id: accountData.account_id,
+          processor: "dwolla" as ProcessorTokenCreateRequestProcessorEnum,
+        };
+
+        const processorTokenResponse =
+          await plaidClient.processorTokenCreate(request);
+        const processorToken = processorTokenResponse.data.processor_token;
+
+        // Now we need to create a funding source URL for each selected account.
+        const fundingSourceUrl = await addFundingSource({
+          dwollaCustomerId: user.dwollaCustomerId,
+          processorToken,
+          bankName: accountData.name,
+        });
+
+        if (!fundingSourceUrl) {
+          throw new Error(
+            `Error creating funding source for ${accountData.name}`,
+          );
+        }
+
+        return createBankAccount({
+          userId: user.$id,
+          bankId: itemId,
+          accountId: accountData.account_id,
+          accessToken,
+          fundingSourceUrl,
+          shareableId: encryptId(accountData.account_id),
+        });
+      }),
+    );
+    console.log("[exchangePublicToken] bank accounts created", {
+      count: bankAccounts.length,
+      bankAccounts: bankAccounts.map((bankAccount) => ({
+        $id: bankAccount?.$id,
+        userId: bankAccount?.userId,
+        accountId: bankAccount?.accountId,
+        bankId: bankAccount?.bankId,
+        fundingSourceUrl: bankAccount?.fundingSourceUrl,
+        shareableId: bankAccount?.shareableId,
+      })),
     });
 
     //Lastly we need to revalidate the path to reflect the changes
@@ -404,11 +487,71 @@ export const exchangePublicToken = async ({
     //Return a success message!
     return parseStringify({
       publicTokenExchange: "complete",
+      accountsAdded: bankAccounts.length,
     })
 
+
+  }
+  catch(error){
+    console.error("Error exchanging public token:", error);
+    throw error;
+  }
+}
+export const getBanks = async ({ userId }: getBanksProps) => {
+
+  try {
+    const { database }= await createAdminClient();
+    
+    // we want t get the banks inside our database, using our database ID, BankID, and most importantly, we query with the follwowing syntax for our appwrite db: Qeury.equal('userId'), [userId])
+    const banks = await database.listDocuments(
+      DATABASE_ID!,
+      BANK_TABLE_ID!,
+      [Query.equal('userId', [userId])]
+    )
+    console.log("[getBanks] returning", {
+      userId,
+      count: banks.documents.length,
+      banks: banks.documents.map((bank) => ({
+        $id: bank.$id,
+        accountId: bank.accountId,
+        bankId: bank.bankId,
+        fundingSourceUrl: bank.fundingSourceUrl,
+        userId: bank.userId,
+        shareableId: bank.shareableId,
+      })),
+    });
+    return parseStringify(banks.documents);
 
   }
   catch(error){
     console.log(error)
   }
 }
+
+export const getBank = async ({ documentId } : getBankProps ) => {
+  try {
+    const { database } = await createAdminClient();
+
+    // we want t get the banks inside our database, using our database ID, BankID, and most importantly, we query with the follwowing syntax for our appwrite db: Qeury.equal('userId'), [userId])
+    const bank = await database.listDocuments(DATABASE_ID!, BANK_TABLE_ID!, [
+      Query.equal("$id", [documentId]),
+    ]);
+    console.log("[getBank] returning", {
+      documentId,
+      found: Boolean(bank.documents[0]),
+      bank: bank.documents[0]
+        ? {
+            $id: bank.documents[0].$id,
+            accountId: bank.documents[0].accountId,
+            bankId: bank.documents[0].bankId,
+            fundingSourceUrl: bank.documents[0].fundingSourceUrl,
+            userId: bank.documents[0].userId,
+            shareableId: bank.documents[0].shareableId,
+          }
+        : null,
+    });
+    return parseStringify(bank.documents[0]);
+  } catch (error) {
+    console.log(error);
+  }
+};
