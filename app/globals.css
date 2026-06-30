@@ -325,11 +325,11 @@
   }
 
   .plaidlink-ghost {
-    @apply flex cursor-pointer items-center justify-center gap-3 rounded-lg px-3 py-7 hover:bg-milo-card lg:justify-start;
+    @apply flex h-auto w-full cursor-pointer items-center justify-start gap-3 rounded-lg border-0 bg-transparent px-3 py-3 text-left shadow-none hover:bg-milo-card hover:shadow-form disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  .plaidlink-default {
-    @apply flex !justify-start cursor-pointer gap-3 rounded-lg !bg-transparent flex-row;
+  .plaidlink-sidebar {
+    @apply flex h-auto w-full cursor-pointer items-center justify-start gap-3 rounded-lg border-0 bg-transparent py-1 text-left shadow-none transition-all hover:bg-milo-card hover:shadow-form disabled:cursor-not-allowed disabled:opacity-50 md:p-3 2xl:p-4;
   }
 
   /* Auth */

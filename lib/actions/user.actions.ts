@@ -12,7 +12,7 @@ import {
   Products,
 } from "plaid";
 import { plaidClient } from "@/lib/plaid";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { addFundingSource, createDwollaCustomer } from "./dwolla.actions";
 
 const {
@@ -340,6 +340,25 @@ export const createBankAccount = async ({
   try{
     //createAdminClient allows us to create/add to the database
     const { database } = await createAdminClient();
+
+    const existingBankAccount = await database.listDocuments(
+      DATABASE_ID!,
+      BANK_TABLE_ID!,
+      [
+        Query.equal("userId", [userId]),
+        Query.equal("fundingSourceUrl", [fundingSourceUrl]),
+      ],
+    );
+
+    if (existingBankAccount.documents[0]) {
+      console.warn("[createBankAccount] bank account already exists", {
+        userId,
+        fundingSourceUrl,
+        bankDocumentId: existingBankAccount.documents[0].$id,
+      });
+      return parseStringify(existingBankAccount.documents[0]);
+    }
+
     const bankAccount = await database.createDocument(
       DATABASE_ID!,
       BANK_TABLE_ID!,
@@ -482,6 +501,8 @@ export const exchangePublicToken = async ({
     });
 
     //Lastly we need to revalidate the path to reflect the changes
+    updateTag("plaid-accounts");
+    updateTag("plaid-transactions");
     revalidatePath("/");
 
     //Return a success message!

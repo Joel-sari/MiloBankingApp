@@ -9,13 +9,15 @@ const {
   APPWRITE_TRANSACTION_TABLE_ID: TRANSACTION_TABLE_ID,
 } = process.env;
 
+let canQueryTransferTransactions = true;
+
 export const getTransactionsByBankId = async ({
   bankId,
 }: getTransactionsByBankIdProps) => {
   try {
     const { database } = await createAdminClient();
 
-    if (!DATABASE_ID || !TRANSACTION_TABLE_ID) {
+    if (!DATABASE_ID || !TRANSACTION_TABLE_ID || !canQueryTransferTransactions) {
       return { documents: [] };
     }
 
@@ -23,6 +25,14 @@ export const getTransactionsByBankId = async ({
       Query.equal("senderBankId", bankId),
     ]);
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("Attribute not found in schema: senderBankId")
+    ) {
+      canQueryTransferTransactions = false;
+      return { documents: [] };
+    }
+
     console.error("An error occurred while getting transfer transactions:", error);
     return { documents: [] };
   }

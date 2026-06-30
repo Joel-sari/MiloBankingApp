@@ -5,6 +5,7 @@ import { Button } from './ui/button'
 import { PlaidLinkOnSuccess, PlaidLinkOptions, usePlaidLink } from 'react-plaid-link'
 import { useRouter } from 'next/navigation'
 import { createLinkToken, exchangePublicToken } from '@/lib/actions/user.actions'
+import Image from 'next/image';
 
 
 const PlaidLink = ( { user, variant } : PlaidLinkProps ) => {
@@ -31,8 +32,6 @@ const PlaidLink = ( { user, variant } : PlaidLinkProps ) => {
       user,
     }
     )
-    console.log("[PlaidLink] exchangePublicToken response", response);
-
     // after the exhange of token we can go to the home page 
     router.push('/');
     router.refresh();
@@ -48,25 +47,49 @@ const PlaidLink = ( { user, variant } : PlaidLinkProps ) => {
   const { open, ready } = usePlaidLink(configuration);
   return (
     <>
-      { variant === "primary" ? (
-        <Button 
-          onClick={()=> open()}
+      {variant === "primary" ? (
+        <Button
+          onClick={() => open()}
           disabled={!ready}
           className="plaidlink-primary"
         >
           Connect Bank
         </Button>
-      ): variant === "ghost" ? (
-        <Button>
-          Connect Bank
+      ) : variant === "ghost" ? (
+        <Button
+          onClick={() => open()}
+          disabled={!ready}
+          variant="ghost"
+          className="plaidlink-ghost"
+        >
+          <Image
+            src="/icons/connect-bank.svg"
+            alt="connect bank"
+            width={24}
+            height={24}
+          />
+          <p className="text-[16px] font-semibold text-black-2">
+            Connect Bank
+          </p>
         </Button>
-      ): (
-        <Button>
-          Connect Bank
+      ) : (
+        <Button
+          onClick={() => open()}
+          disabled={!ready}
+          variant="ghost"
+          className="plaidlink-sidebar"
+        >
+          <Image
+            src="/icons/connect-bank.svg"
+            alt="connect bank"
+            width={24}
+            height={24}
+          />
+          <p className="text-[16px] font-semibold text-black-2">Connect Bank</p>
         </Button>
-      ) }
+      )}
     </>
-  )
+  );
 }
 
 export default PlaidLink

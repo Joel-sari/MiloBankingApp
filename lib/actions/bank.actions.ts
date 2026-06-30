@@ -12,6 +12,7 @@ import {
 
 import { plaidClient } from "../plaid";
 import { parseStringify } from "../utils";
+import { unstable_cache } from "next/cache";
 import {
   normalizePlaidPaymentChannel,
   normalizePlaidTransactionCategory,
@@ -25,32 +26,90 @@ type PlaidInstitution = {
   institution_id?: string;
 };
 
+const getCachedPlaidAccounts = unstable_cache(
+  async (accessToken: string) => {
+    const accountsResponse = await plaidClient.accountsGet({
+      access_token: accessToken,
+    });
+
+    return parseStringify(accountsResponse.data);
+  },
+  ["plaid-accounts"],
+  {
+    tags: ["plaid-accounts"],
+    revalidate: 300,
+  },
+);
+
+const getCachedPlaidInstitution = unstable_cache(
+  async (institutionId: string) => {
+    const institutionResponse = await plaidClient.institutionsGetById({
+      institution_id: institutionId,
+      country_codes: ["US"] as CountryCode[],
+    });
+
+    return parseStringify(institutionResponse.data.institution);
+  },
+  ["plaid-institution"],
+  {
+    tags: ["plaid-institutions"],
+    revalidate: 3600,
+  },
+);
+
+const getCachedPlaidTransactions = unstable_cache(
+  async (accessToken: string) => {
+    let hasMore = true;
+    let transactions: Transaction[] = [];
+
+    while (hasMore) {
+      const response = await plaidClient.transactionsSync({
+        access_token: accessToken,
+        options: {
+          include_personal_finance_category: true,
+          days_requested: 180,
+        },
+      });
+
+      const data = response.data;
+
+      const addedTransactions = response.data.added.map((transaction) => ({
+        id: transaction.transaction_id,
+        name: normalizePlaidTransactionName(transaction),
+        paymentChannel: normalizePlaidPaymentChannel(transaction),
+        type: transaction.amount > 0 ? "debit" : "credit",
+        accountId: transaction.account_id,
+        amount: Math.abs(transaction.amount),
+        pending: transaction.pending,
+        category: normalizePlaidTransactionCategory(transaction),
+        date: transaction.date,
+        image: transaction.logo_url,
+      }));
+
+      transactions = [...transactions, ...addedTransactions];
+      hasMore = data.has_more;
+    }
+
+    return parseStringify(transactions);
+  },
+  ["plaid-transactions"],
+  {
+    tags: ["plaid-transactions"],
+    revalidate: 300,
+  },
+);
+
 // Get multiple bank accounts
 export const getAccounts = async ({ userId }: getAccountsProps) => {
   try {
     // get all banks from the DB (appwrite)
     const banks = (((await getBanks({ userId })) ?? []) as unknown) as Bank[];
-    console.log("[getAccounts] bank documents", {
-      userId,
-      count: banks.length,
-      banks: banks.map((bank) => ({
-        $id: bank.$id,
-        accountId: bank.accountId,
-        bankId: bank.bankId,
-        fundingSourceUrl: bank.fundingSourceUrl,
-        userId: bank.userId,
-        shareableId: bank.shareableId,
-      })),
-    });
-
     // getting access to all the accounts from all of the banks, at the same time
     const accounts = await Promise.all(
       banks?.map(async (bank: Bank) => {
         // get each account info from plaid
-        const accountsResponse = await plaidClient.accountsGet({
-          access_token: bank.accessToken,
-        });
-        const accountData = accountsResponse.data.accounts.find(
+        const accountsData = await getCachedPlaidAccounts(bank.accessToken);
+        const accountData = accountsData.accounts.find(
           (account) => account.account_id === bank.accountId,
         );
 
@@ -59,7 +118,7 @@ export const getAccounts = async ({ userId }: getAccountsProps) => {
         }
 
         // get institution info from plaid
-        const plaidInstitutionId = accountsResponse.data.item.institution_id!;
+        const plaidInstitutionId = accountsData.item.institution_id!;
         const institution = (await getInstitution({
           institutionId: plaidInstitutionId,
         })) as PlaidInstitution | undefined;
@@ -87,10 +146,7 @@ export const getAccounts = async ({ userId }: getAccountsProps) => {
       return total + account.currentBalance;
     }, 0);
 
-    const result = { data: accounts, totalBanks, totalCurrentBalance };
-    console.log("[getAccounts] returning", result);
-
-    return parseStringify(result);
+    return parseStringify({ data: accounts, totalBanks, totalCurrentBalance });
   } catch (error) {
     console.error("An error occurred while getting the accounts:", error);
   }
@@ -103,23 +159,9 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     const bank = await getBank({ documentId: appwriteItemId });
 
     if (!bank) throw new Error("Bank not found");
-    console.log("[getAccount] bank document", {
-      appwriteItemId,
-      bank: {
-        $id: bank.$id,
-        accountId: bank.accountId,
-        bankId: bank.bankId,
-        fundingSourceUrl: bank.fundingSourceUrl,
-        userId: bank.userId,
-        shareableId: bank.shareableId,
-      },
-    });
-
     // get account info from plaid
-    const accountsResponse = await plaidClient.accountsGet({
-      access_token: bank.accessToken,
-    });
-    const accountData = accountsResponse.data.accounts.find(
+    const accountsData = await getCachedPlaidAccounts(bank.accessToken);
+    const accountData = accountsData.accounts.find(
       (account) => account.account_id === bank.accountId,
     );
 
@@ -146,7 +188,7 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
       }));
 
     // get institution info from plaid
-    const plaidInstitutionId = accountsResponse.data.item.institution_id!;
+    const plaidInstitutionId = accountsData.item.institution_id!;
     const institution = (await getInstitution({
       institutionId: plaidInstitutionId,
     })) as PlaidInstitution | undefined;
@@ -177,17 +219,10 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
       ...transferTransactions,
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const result = {
+    return parseStringify({
       data: account,
       transactions: allTransactions,
-    };
-    console.log("[getAccount] returning", {
-      data: result.data,
-      transactionCount: result.transactions.length,
-      transactions: result.transactions,
     });
-
-    return parseStringify(result);
   } catch (error) {
     console.error("An error occurred while getting the account:", error);
   }
@@ -198,14 +233,7 @@ export const getInstitution = async ({
   institutionId,
 }: getInstitutionProps) => {
   try {
-    const institutionResponse = await plaidClient.institutionsGetById({
-      institution_id: institutionId,
-      country_codes: ["US"] as CountryCode[],
-    });
-
-    const intitution = institutionResponse.data.institution;
-
-    return parseStringify(intitution);
+    return getCachedPlaidInstitution(institutionId);
   } catch (error) {
     console.error("An error occurred while getting the institution:", error);
   }
@@ -215,40 +243,8 @@ export const getInstitution = async ({
 export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
-  let hasMore = true;
-  let transactions: any = [];
-
   try {
-    // Iterate through each page of new transaction updates for item
-    while (hasMore) {
-      const response = await plaidClient.transactionsSync({
-        access_token: accessToken,
-        options: {
-          include_personal_finance_category: true,
-          days_requested: 180,
-        },
-      });
-
-      const data = response.data;
-
-      const addedTransactions = response.data.added.map((transaction) => ({
-          id: transaction.transaction_id,
-          name: normalizePlaidTransactionName(transaction),
-          paymentChannel: normalizePlaidPaymentChannel(transaction),
-          type: transaction.amount > 0 ? "debit" : "credit",
-          accountId: transaction.account_id,
-          amount: Math.abs(transaction.amount),
-          pending: transaction.pending,
-          category: normalizePlaidTransactionCategory(transaction),
-          date: transaction.date,
-          image: transaction.logo_url,
-        }));
-
-      transactions = [...transactions, ...addedTransactions];
-      hasMore = data.has_more;
-    }
-
-    return parseStringify(transactions);
+    return getCachedPlaidTransactions(accessToken);
   } catch (error) {
     console.error("An error occurred while getting Plaid transactions:", error);
     return [];

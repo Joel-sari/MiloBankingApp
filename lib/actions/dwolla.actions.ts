@@ -23,6 +23,26 @@ const dwollaClient = new Client({
   secret: process.env.DWOLLA_SECRET as string,
 });
 
+const getDuplicateFundingSourceUrl = (err: unknown) => {
+  const body = (err as { body?: unknown })?.body;
+
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "code" in body &&
+    body.code === "DuplicateResource" &&
+    "_links" in body
+  ) {
+    const links = body._links as {
+      about?: {
+        href?: string;
+      };
+    };
+
+    return links.about?.href;
+  }
+};
+
 // Create a Dwolla Funding Source using a Plaid Processor Token
 export const createFundingSource = async (
   options: CreateFundingSourceOptions,
@@ -35,6 +55,18 @@ export const createFundingSource = async (
       })
       .then((res) => res.headers.get("location"));
   } catch (err) {
+    const duplicateFundingSourceUrl = getDuplicateFundingSourceUrl(err);
+
+    if (duplicateFundingSourceUrl) {
+      console.warn(
+        "[createFundingSource] funding source already exists; reusing it",
+        {
+          fundingSourceUrl: duplicateFundingSourceUrl,
+        },
+      );
+      return duplicateFundingSourceUrl;
+    }
+
     console.error("Creating a Funding Source Failed: ", err);
   }
 };

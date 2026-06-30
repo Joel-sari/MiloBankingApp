@@ -38,15 +38,6 @@ const Home = async ({
     ? await getAccount({ appwriteItemId })
     : null;
 
-  console.log("[Home] returned data", {
-    userId: loggedIn.$id,
-    selectedAccountId,
-    appwriteItemId,
-    accounts,
-    account,
-  });
-
-
   const banks: Account[] = [
     {
       id: 'checking-001',
